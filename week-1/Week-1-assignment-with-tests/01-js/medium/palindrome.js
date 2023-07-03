@@ -7,7 +7,17 @@
 */
 
 function isPalindrome(str) {
+  const strModified = str.toLowerCase().replace(/[^a-zA-Z0-9]/g, "");
+  const length = strModified.length;
+
+  for (let i = 0; i < length; i++) {
+    if (i === length - 1 - i) continue;
+    if (strModified[i] !== strModified[length - 1 - i]) return false;
+  }
   return true;
 }
+
+// console.log(isPalindrome("A man a plan a canal Panama"));
+// console.log(isPalindrome("Able, was I ere I saw Elba!"));
 
 module.exports = isPalindrome;
