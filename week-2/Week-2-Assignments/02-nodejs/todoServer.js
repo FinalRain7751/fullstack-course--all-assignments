@@ -1,3 +1,4 @@
+"use strict";
 /**
   You need to create an express HTTP server in Node.js which will handle the logic of a todo list app.
   - Don't use any database, just store all the data in an array to store the todo list data (in-memory)
@@ -39,11 +40,166 @@
 
   Testing the server - run `npm run test-todoServer` command in terminal
  */
-const express = require('express');
-const bodyParser = require('body-parser');
+const express = require("express");
+const fs = require("fs");
+// const port = 3000;
+// const bodyParser = require("body-parser");
 
 const app = express();
 
-app.use(bodyParser.json());
+app.use(express.json());
+
+// const todos = [];
+let todos = JSON.parse(fs.readFileSync(`${__dirname}/files/todos.json`));
+// console.log(todos);
+// for (let i = 0; i < 50; i++) {
+//   todos.push({
+//     id: i + 1,
+//     title: "A todo",
+//     description: `Todo number ${i + 1}`,
+//   });
+// }
+
+// todos.forEach((element, i) => {
+//   const description = `Todo number ${i + 1}`;
+//   element.description = description;
+// });
+
+// fs.writeFileSync(`${__dirname}/files/todos.json`, JSON.stringify(todos));
+
+// Route handlers
+
+const getAllTodos = (req, res) => {
+  res.status(200).json({
+    status: "success",
+    results: todos.length,
+    data: {
+      todos,
+    },
+  });
+};
+
+const createTodo = (req, res) => {
+  const todoBody = req.body;
+
+  if (!todoBody) {
+    res.status(500).send("No todo given");
+  }
+
+  const idNew = todos.length !== 0 ? todos.at(-1).id + 1 : 1;
+
+  const todo = Object.assign(todoBody, { id: idNew });
+  todos.push(todo);
+
+  fs.writeFile(
+    `${__dirname}/files/todos.json`,
+    JSON.stringify(todos),
+    "utf-8",
+    (err) => {
+      if (err) res.status(500).send("Could not create todo.");
+      else {
+        fs.readFile(`${__dirname}/files/todos.json`, "utf-8", (err, file) => {
+          todos = JSON.parse(file);
+          res.status(201).json({
+            status: "success",
+            data: {
+              todo,
+            },
+          });
+        });
+      }
+    }
+  );
+};
+
+const getTodo = (req, res) => {
+  const id = +req.params.id;
+  const todo = todos.find((todo) => todo.id === id);
+
+  if (!todo) {
+    res.status(404).send("Not found");
+    return;
+  }
+
+  res.status(200).json({
+    status: "success",
+    data: {
+      todo,
+    },
+  });
+};
+
+const updateTodo = (req, res) => {
+  const idOfTodo = +req.params.id;
+  let todo = todos.find((todo) => todo.id === idOfTodo);
+  if (!todo) {
+    res.status(404).send("Not found");
+    return;
+  }
+
+  const {
+    id = idOfTodo,
+    title = todo.title,
+    description = todo.description,
+    completed = todo.completed,
+  } = req.body;
+
+  const index = todos.findIndex((td) => td.id === id);
+
+  todos[index] = {
+    id,
+    title,
+    description,
+    completed,
+  };
+
+  fs.writeFile(
+    `${__dirname}/files/todos.json`,
+    JSON.stringify(todos),
+    "utf-8",
+    (err) => {
+      if (err) res.status(500).send("Could not update todo.");
+      else {
+        fs.readFile(`${__dirname}/files/todos.json`, "utf-8", (err, file) => {
+          todos = JSON.parse(file);
+          res.status(200).send("OK");
+        });
+      }
+    }
+  );
+};
+
+const deleteTodo = (req, res) => {
+  const id = +req.params.id;
+  const todoIndex = todos.findIndex((todo) => todo.id === id);
+
+  if (todoIndex === -1) {
+    res.status(404).send("Not found");
+    return;
+  }
+
+  todos.splice(todoIndex, 1);
+
+  fs.writeFile(
+    `${__dirname}/files/todos.json`,
+    JSON.stringify(todos),
+    "utf-8",
+    (err) => {
+      if (err) res.status(500).send("Could not delete todo.");
+      else {
+        fs.readFile(`${__dirname}/files/todos.json`, "utf-8", (err, file) => {
+          todos = JSON.parse(file);
+          res.status(200).send("OK");
+        });
+      }
+    }
+  );
+};
+
+// Routes
+app.route("/todos").get(getAllTodos).post(createTodo);
+app.route("/todos/:id").get(getTodo).patch(updateTodo).delete(deleteTodo);
+
+// app.listen(3000);
 
 module.exports = app;
