@@ -46,160 +46,165 @@ const fs = require("fs");
 // const bodyParser = require("body-parser");
 
 const app = express();
+const pathName = `todos.json`;
 
 app.use(express.json());
 
-// const todos = [];
-let todos = JSON.parse(fs.readFileSync(`${__dirname}/files/todos.json`));
-// console.log(todos);
-// for (let i = 0; i < 50; i++) {
-//   todos.push({
-//     id: i + 1,
-//     title: "A todo",
-//     description: `Todo number ${i + 1}`,
-//   });
-// }
+// Helper functions
 
-// todos.forEach((element, i) => {
-//   const description = `Todo number ${i + 1}`;
-//   element.description = description;
-// });
+const indexOfTodo = (todos, id) => todos.findIndex((todo) => todo.id === id);
 
-// fs.writeFileSync(`${__dirname}/files/todos.json`, JSON.stringify(todos));
+const retrieveTodos = () => {
+  return new Promise((resolve, reject) => {
+    fs.readFile(pathName, "utf-8", (err, data) => {
+      if (err) {
+        res.status(500).send("Error");
+        throw new Error("Failed to read from database.");
+      }
+      resolve(JSON.parse(data));
+    });
+  });
+};
+
+const writeTodos = (todos) => {
+  return new Promise((resolve, reject) => {
+    fs.writeFile(pathName, JSON.stringify(todos), "utf-8", (err) => {
+      if (err) {
+        res.status(500).send("Error");
+        throw new Error("Failed to write to database.");
+      }
+      resolve();
+    });
+  });
+};
 
 // Route handlers
 
 const getAllTodos = (req, res) => {
-  res.status(200).json({
-    status: "success",
-    results: todos.length,
-    data: {
-      todos,
-    },
-  });
+  retrieveTodos()
+    .then((todos) => {
+      res.status(200).json({
+        status: "success",
+        results: todos.length,
+        data: {
+          todos,
+        },
+      });
+    })
+    .catch((err) => {
+      console.error(err);
+    });
 };
 
 const createTodo = (req, res) => {
   const todoBody = req.body;
-
   if (!todoBody) {
     res.status(500).send("No todo given");
+    throw new Error("Error");
   }
+  const id = Math.floor(Date.now() / 1000);
+  const todo = Object.assign(todoBody, { id });
 
-  const idNew = todos.length !== 0 ? todos.at(-1).id + 1 : 1;
-
-  const todo = Object.assign(todoBody, { id: idNew });
-  todos.push(todo);
-
-  fs.writeFile(
-    `${__dirname}/files/todos.json`,
-    JSON.stringify(todos),
-    "utf-8",
-    (err) => {
-      if (err) res.status(500).send("Could not create todo.");
-      else {
-        fs.readFile(`${__dirname}/files/todos.json`, "utf-8", (err, file) => {
-          todos = JSON.parse(file);
-          res.status(201).json({
-            status: "success",
-            data: {
-              todo,
-            },
-          });
-        });
-      }
-    }
-  );
+  retrieveTodos()
+    .then((todos) => {
+      todos.push(todo);
+      return writeTodos(todos);
+    })
+    .then(() => {
+      res.status(201).json({
+        status: "success",
+        data: {
+          todo,
+        },
+      });
+    })
+    .catch((err) => {
+      console.error(err);
+    });
 };
 
 const getTodo = (req, res) => {
   const id = +req.params.id;
-  const todo = todos.find((todo) => todo.id === id);
 
-  if (!todo) {
-    res.status(404).send("Not found");
-    return;
-  }
-
-  res.status(200).json({
-    status: "success",
-    data: {
-      todo,
-    },
-  });
+  retrieveTodos()
+    .then((todos) => {
+      const todo = todos.find((todo) => todo.id === id);
+      if (!todo) {
+        res.status(404).send("Not found");
+        return;
+      }
+      res.status(200).json({
+        status: "success",
+        data: {
+          todo,
+        },
+      });
+    })
+    .catch((err) => {
+      console.log(err);
+    });
 };
 
 const updateTodo = (req, res) => {
   const idOfTodo = +req.params.id;
-  let todo = todos.find((todo) => todo.id === idOfTodo);
-  if (!todo) {
-    res.status(404).send("Not found");
-    return;
-  }
-
-  const {
-    id = idOfTodo,
-    title = todo.title,
-    description = todo.description,
-    completed = todo.completed,
-  } = req.body;
-
-  const index = todos.findIndex((td) => td.id === id);
-
-  todos[index] = {
-    id,
-    title,
-    description,
-    completed,
-  };
-
-  fs.writeFile(
-    `${__dirname}/files/todos.json`,
-    JSON.stringify(todos),
-    "utf-8",
-    (err) => {
-      if (err) res.status(500).send("Could not update todo.");
-      else {
-        fs.readFile(`${__dirname}/files/todos.json`, "utf-8", (err, file) => {
-          todos = JSON.parse(file);
-          res.status(200).send("OK");
-        });
+  retrieveTodos()
+    .then((todos) => {
+      let todo = todos.find((todo) => todo.id === idOfTodo);
+      if (!todo) {
+        res.status(404).send("Not found");
+        throw new Error("Not found");
       }
-    }
-  );
+      const {
+        id = idOfTodo,
+        title = todo.title,
+        description = todo.description,
+        completed = todo.completed,
+      } = req.body;
+      const index = indexOfTodo(todos, id);
+      todos[index] = {
+        id,
+        title,
+        description,
+        completed,
+      };
+      return writeTodos(todos);
+    })
+    .then(() => {
+      res.status(200).send("OK");
+    })
+    .catch((err) => {
+      console.error(err);
+    });
 };
 
 const deleteTodo = (req, res) => {
   const id = +req.params.id;
-  const todoIndex = todos.findIndex((todo) => todo.id === id);
-
-  if (todoIndex === -1) {
-    res.status(404).send("Not found");
-    return;
-  }
-
-  todos.splice(todoIndex, 1);
-
-  fs.writeFile(
-    `${__dirname}/files/todos.json`,
-    JSON.stringify(todos),
-    "utf-8",
-    (err) => {
-      if (err) res.status(500).send("Could not delete todo.");
-      else {
-        fs.readFile(`${__dirname}/files/todos.json`, "utf-8", (err, file) => {
-          todos = JSON.parse(file);
-          res.status(200).send("OK");
-        });
+  retrieveTodos()
+    .then((todos) => {
+      const todoIndex = indexOfTodo(todos, id);
+      if (todoIndex === -1) {
+        res.status(404).send("Not found");
+        throw new Error("Not found");
       }
-    }
-  );
+      todos.splice(todoIndex, 1);
+      return writeTodos(todos);
+    })
+    .then(() => {
+      res.status(200).send("OK");
+    })
+    .catch((err) => {
+      console.error(err);
+    });
 };
 
 // Routes
 app.route("/todos").get(getAllTodos).post(createTodo);
 app.route("/todos/:id").get(getTodo).patch(updateTodo).delete(deleteTodo);
 
-// app.listen(3000);
+app.use((req, res, next) => {
+  res.status(404).send("Not found");
+});
+
+app.listen(3000);
 
 module.exports = app;
